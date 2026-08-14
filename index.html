@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>卓溪農產 - 線上訂購系統</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-stone-100 text-stone-800 min-h-screen pb-12">
+  <div class="max-w-md mx-auto bg-white min-h-screen shadow-md p-5">
+    <header class="border-b pb-4 mb-5 text-center">
+      <h1 class="text-2xl font-bold text-emerald-800">🌿 卓溪農產線上訂購</h1>
+      <p class="text-xs text-stone-500 mt-1">產地直達・新鮮品質</p>
+    </header>
+
+    <!-- 載入中動畫 -->
+    <div id="loading" class="text-center py-12">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-600 border-t-transparent"></div>
+      <p class="text-sm text-stone-500 mt-2">正在載入您的資料與商品選單...</p>
+    </div>
+
+    <!-- 訂購表單 (載入完畢後顯示) -->
+    <form id="orderForm" class="hidden space-y-4">
+      <div>
+        <label class="block text-sm font-semibold mb-1">訂購人姓名</label>
+        <input type="text" id="name" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-1">聯絡電話</label>
+        <input type="tel" id="phone" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-1">寄件地址</label>
+        <textarea id="address" rows="2" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none"></textarea>
+      </div>
+
+      <hr class="my-4 border-dashed">
+
+      <div>
+        <label class="block text-sm font-semibold mb-1">選擇商品</label>
+        <select id="productSelect" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+          <option value="">載入商品中...</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-semibold mb-1">訂購箱數</label>
+          <input type="number" id="boxes" min="1" value="1" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-1">預計出貨週次</label>
+          <select id="shipWeek" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+            <option value="下週出貨">下週出貨</option>
+            <option value="本月中旬">本月中旬</option>
+            <option value="本月底">本月底</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-1">轉帳帳號後 5 碼</label>
+        <input type="text" id="payLast5" maxlength="5" placeholder="例如：12345" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+      </div>
+
+      <!-- 金額試算區 -->
+      <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-200 mt-4 space-y-1">
+        <div class="flex justify-between text-sm text-stone-600">
+          <span>商品小計：</span>
+          <span id="subtotalText">NT$ 0</span>
+        </div>
+        <div class="flex justify-between text-sm text-stone-600">
+          <span>預估運費：</span>
+          <span id="shippingText">NT$ 160</span>
+        </div>
+        <div class="flex justify-between font-bold text-lg text-emerald-900 border-t border-emerald-200 pt-2 mt-2">
+          <span>總計金額：</span>
+          <span id="totalText">NT$ 160</span>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3.5 rounded-xl shadow-lg transition duration-200 mt-6">
+        確認送出訂單
+      </button>
+    </form>
+  </div>
+
+  <script>
+    // ⚙️ 設定區
+    const LIFF_ID = "2011111006-ozQwHNo2"; 
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyHGBn0s6zYUV4PRRxZbsELbWPtAeL5VsreF5PbSAsm0CBH95O-WbYhcWAGZEUJrZaw/exec"; 
+
+    let currentUserProfile = null;
+    let productsList = [];
+
+    async function initLIFF() {
+      try {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        currentUserProfile = await liff.getProfile();
+        await loadInitialData(currentUserProfile.userId);
+      } catch (err) {
+        alert("LIFF 初始化失敗：" + err.message);
+      }
+    }
+
+    async function loadInitialData(userId) {
+      try {
+        const res = await fetch(`${GAS_URL}?userId=${userId}`);
+        const data = await res.json();
+
+        if (data.status === 'success') {
+          productsList = data.products;
+          renderProducts(productsList);
+
+          if (data.customer) {
+            document.getElementById('name').value = data.customer.name || currentUserProfile.displayName;
+            document.getElementById('phone').value = data.customer.phone || '';
+            document.getElementById('address').value = data.customer.address || '';
+          } else {
+            document.getElementById('name').value = currentUserProfile.displayName;
+          }
+
+          document.getElementById('loading').classList.add('hidden');
+          document.getElementById('orderForm').classList.remove('hidden');
+          calculateTotal();
+        }
+      } catch (err) {
+        alert("讀取資料失敗，請重新載入！");
+      }
+    }
+
+    function renderProducts(products) {
+      const select = document.getElementById('productSelect');
+      select.innerHTML = products.map((p, index) => 
+        `<option value="${index}">${p.name} (${p.grade}級) - ${p.spec}斤/箱 ($${p.price})</option>`
+      ).join('');
+    }
+
+    function calculateTotal() {
+      const select = document.getElementById('productSelect');
+      if (select.selectedIndex === -1 || productsList.length === 0) return;
+
+      const selectedProd = productsList[select.selectedIndex];
+      const boxes = parseInt(document.getElementById('boxes').value) || 1;
+      const shippingFee = 160; 
+
+      const subtotal = selectedProd.price * boxes;
+      const total = subtotal + shippingFee;
+
+      document.getElementById('subtotalText').innerText = `NT$ ${subtotal}`;
+      document.getElementById('shippingText').innerText = `NT$ ${shippingFee}`;
+      document.getElementById('totalText').innerText = `NT$ ${total}`;
+    }
+
+    document.getElementById('productSelect').addEventListener('change', calculateTotal);
+    document.getElementById('boxes').addEventListener('input', calculateTotal);
+
+    document.getElementById('orderForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = "訂單處理中...";
+
+      const selectedProd = productsList[document.getElementById('productSelect').selectedIndex];
+
+      const payload = {
+        userId: currentUserProfile.userId,
+        name: document.getElementById('name').value,
+        phone: document.getElementById('phone').value,
+        address: document.getElementById('address').value,
+        productName: selectedProd.name,
+        grade: selectedProd.grade,
+        spec: selectedProd.spec,
+        price: selectedProd.price,
+        boxes: parseInt(document.getElementById('boxes').value),
+        shipWeek: document.getElementById('shipWeek').value,
+        payLast5: document.getElementById('payLast5').value,
+        shippingFee: 160
+      };
+
+      try {
+        const res = await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+          alert(`🎉 訂單已順利送出！\n訂單編號：${result.orderId}`);
+          liff.closeWindow();
+        } else {
+          alert("下單失敗：" + result.message);
+          submitBtn.disabled = false;
+          submitBtn.innerText = "確認送出訂單";
+        }
+      } catch (err) {
+        alert("網路連線異常，請稍後再試！");
+        submitBtn.disabled = false;
+        submitBtn.innerText = "確認送出訂單";
+      }
+    });
+
+    window.onload = initLIFF;
+  </script>
+</body>
+</html>
