@@ -61,6 +61,14 @@
         </div>
       </div>
 
+      <!-- 💳 匯款帳號提示框 -->
+      <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 space-y-1 mb-3">
+        <p class="font-bold text-sm text-amber-800 mb-1">💳 匯款資訊：</p>
+        <p>【銀行代碼】806 元大商業銀行 （淡水分行）</p>
+        <p>【帳號】2-126-2-00006951-7</p>
+        <p>【戶名】汪冠宏</p>
+      </div>
+
       <div>
         <label class="block text-sm font-semibold mb-1">轉帳帳號後 5 碼</label>
         <input type="text" id="payLast5" maxlength="5" placeholder="例如：12345" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
@@ -95,6 +103,7 @@
 
     let currentUserProfile = null;
     let productsList = [];
+    let currentShippingFee = 160;
 
     async function initLIFF() {
       try {
@@ -117,6 +126,9 @@
 
         if (data.status === 'success') {
           productsList = data.products;
+          if (data.shippingFee) {
+            currentShippingFee = Number(data.shippingFee);
+          }
           renderProducts(productsList);
 
           if (data.customer) {
@@ -149,7 +161,7 @@
 
       const selectedProd = productsList[select.selectedIndex];
       const boxes = parseInt(document.getElementById('boxes').value) || 1;
-      const shippingFee = 160; 
+      const shippingFee = currentShippingFee; 
 
       const subtotal = selectedProd.price * boxes;
       const total = subtotal + shippingFee;
@@ -182,7 +194,7 @@
         boxes: parseInt(document.getElementById('boxes').value),
         shipWeek: document.getElementById('shipWeek').value,
         payLast5: document.getElementById('payLast5').value,
-        shippingFee: 160
+        shippingFee: currentShippingFee
       };
 
       try {
