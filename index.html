@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>卓溪小農 - 線上訂購系統</title>
+  <title>卓溪農產 - 線上訂購系統</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-stone-100 text-stone-800 min-h-screen pb-12">
   <div class="max-w-md mx-auto bg-white min-h-screen shadow-md p-5">
     <header class="border-b pb-4 mb-5 text-center">
-      <h1 class="text-2xl font-bold text-emerald-800">🌿 卓溪小農線上訂購</h1>
+      <h1 class="text-2xl font-bold text-emerald-800">🌿 卓溪農產線上訂購</h1>
       <p class="text-xs text-stone-500 mt-1">產地直達・新鮮品質</p>
     </header>
 
@@ -37,29 +37,22 @@
 
       <hr class="my-4 border-dashed">
 
+      <!-- 商品列表選購區 -->
       <div>
-        <label class="block text-sm font-semibold mb-1">選擇商品</label>
-        <select id="productSelect" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
-          <option value="">載入商品中...</option>
+        <label class="block text-sm font-semibold mb-2">選擇商品與數量</label>
+        <div id="productList" class="space-y-3"></div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold mb-1 mt-4">預計出貨週次</label>
+        <select id="shipWeek" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
+          <option value="下週出貨">下週出貨</option>
+          <option value="本月中旬">本月中旬</option>
+          <option value="本月底">本月底</option>
         </select>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm font-semibold mb-1">訂購箱數</label>
-          <input type="number" id="boxes" min="1" value="1" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
-        </div>
-        <div>
-          <label class="block text-sm font-semibold mb-1">預計出貨週次</label>
-          <select id="shipWeek" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
-            <option value="下週出貨">下週出貨</option>
-            <option value="本月中旬">本月中旬</option>
-            <option value="本月底">本月底</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 space-y-1 mb-3">
+      <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 space-y-1 my-3">
         <p class="font-bold text-sm text-amber-800 mb-1">💳 匯款資訊：</p>
         <p>【銀行代碼】806 元大商業銀行 （淡水分行）</p>
         <p>【帳號】2-126-2-00006951-7</p>
@@ -78,13 +71,11 @@
           <span id="subtotalText">NT$ 0</span>
         </div>
         
-        <!-- 折扣欄位（預設隱藏） -->
         <div id="discountRow" class="flex justify-between text-sm text-amber-700 font-medium hidden">
           <span id="discountTitle">滿額折扣：</span>
           <span id="discountText">- NT$ 0</span>
         </div>
 
-        <!-- 運費欄位（預設隱藏） -->
         <div id="shippingRow" class="flex justify-between text-sm text-stone-600 hidden">
           <span>預估運費：</span>
           <span id="shippingText">NT$ 0</span>
@@ -104,10 +95,11 @@
 
   <script>
     const LIFF_ID = "2011111006-ozQwHNo2"; 
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxugx9s58X8aVBD8nh4YKCKzlTa9GnhDUT_iyPrrBQpmWwDA-735tpieR-bWmaPEDYe/exec"; 
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbyHGBn0s6zYUV4PRRxZbsELbWPtAeL5VsreF5PbSAsm0CBH95O-WbYhcWAGZEUJrZaw/exec"; 
 
     let currentUserProfile = null;
     let productsList = [];
+    let quantities = {}; // 記錄每個商品的數量
     let storeConfig = {
       shippingFee: 0,
       freeShippingThreshold: 0,
@@ -138,6 +130,11 @@
           productsList = data.products;
           if (data.config) storeConfig = data.config;
 
+          // 初始化數量物件
+          productsList.forEach((_, index) => {
+            quantities[index] = 0;
+          });
+
           renderProducts(productsList);
 
           if (data.customer) {
@@ -158,38 +155,62 @@
     }
 
     function renderProducts(products) {
-      const select = document.getElementById('productSelect');
-      select.innerHTML = products.map((p, index) => 
-        `<option value="${index}">${p.name} (${p.grade}級) - ${p.spec}斤/箱 ($${p.price})</option>`
-      ).join('');
+      const container = document.getElementById('productList');
+      container.innerHTML = products.map((p, index) => `
+        <div class="flex items-center justify-between p-3.5 bg-stone-50 rounded-xl border border-stone-200">
+          <div>
+            <div class="font-bold text-stone-800 text-sm">
+              ${p.name} <span class="text-xs font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded ml-1">${p.grade}級</span>
+            </div>
+            <div class="text-xs text-stone-500 mt-1">
+              ${p.spec}斤/箱 · <span class="font-bold text-emerald-800">NT$ ${p.price}</span>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button type="button" onclick="changeQty(${index}, -1)" class="w-8 h-8 rounded-lg bg-stone-200 text-stone-700 font-bold text-lg flex items-center justify-center hover:bg-stone-300 active:bg-stone-400">-</button>
+            <input type="number" id="qty-${index}" value="0" min="0" onchange="onQtyInput(${index}, this.value)" class="w-10 text-center border rounded-lg p-1 text-sm font-bold bg-white outline-none">
+            <button type="button" onclick="changeQty(${index}, 1)" class="w-8 h-8 rounded-lg bg-emerald-700 text-white font-bold text-lg flex items-center justify-center hover:bg-emerald-800 active:bg-emerald-900">+</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function changeQty(index, delta) {
+      const current = quantities[index] || 0;
+      const updated = Math.max(0, current + delta);
+      quantities[index] = updated;
+      document.getElementById(`qty-${index}`).value = updated;
+      calculateTotal();
+    }
+
+    function onQtyInput(index, value) {
+      const parsed = Math.max(0, parseInt(value) || 0);
+      quantities[index] = parsed;
+      document.getElementById(`qty-${index}`).value = parsed;
+      calculateTotal();
     }
 
     function calculateTotal() {
-      const select = document.getElementById('productSelect');
-      if (select.selectedIndex === -1 || productsList.length === 0) return;
+      let subtotal = 0;
+      productsList.forEach((p, index) => {
+        const qty = quantities[index] || 0;
+        subtotal += p.price * qty;
+      });
 
-      const selectedProd = productsList[select.selectedIndex];
-      const boxes = parseInt(document.getElementById('boxes').value) || 1;
-      const subtotal = selectedProd.price * boxes;
-
-      // 1. 折扣計算
       let discount = 0;
       if (storeConfig.discountThreshold > 0 && storeConfig.discountRate < 1 && storeConfig.discountRate > 0 && subtotal >= storeConfig.discountThreshold) {
         discount = Math.round(subtotal * (1 - storeConfig.discountRate));
       }
 
-      // 2. 運費計算
       let shippingFee = storeConfig.shippingFee || 0;
-      if (storeConfig.freeShippingThreshold > 0 && subtotal >= storeConfig.freeShippingThreshold) {
+      if (subtotal === 0 || (storeConfig.freeShippingThreshold > 0 && subtotal >= storeConfig.freeShippingThreshold)) {
         shippingFee = 0;
       }
 
-      const total = subtotal - discount + shippingFee;
+      const total = subtotal > 0 ? subtotal - discount + shippingFee : 0;
 
-      // 3. UI 動態顯示／隱藏
       document.getElementById('subtotalText').innerText = `NT$ ${subtotal}`;
 
-      // 折扣欄位控制
       const discountRow = document.getElementById('discountRow');
       if (discount > 0) {
         discountRow.classList.remove('hidden');
@@ -198,9 +219,8 @@
         discountRow.classList.add('hidden');
       }
 
-      // 運費欄位控制（若未填運費或運費為 0，直接隱藏該行）
       const shippingRow = document.getElementById('shippingRow');
-      if (storeConfig.shippingFee > 0) {
+      if (storeConfig.shippingFee > 0 && subtotal > 0) {
         shippingRow.classList.remove('hidden');
         document.getElementById('shippingText').innerText = (shippingFee === 0) ? "NT$ 0 (滿額免運)" : `NT$ ${shippingFee}`;
       } else {
@@ -210,18 +230,35 @@
       document.getElementById('totalText').innerText = `NT$ ${total}`;
     }
 
-    document.getElementById('productSelect').addEventListener('change', calculateTotal);
-    document.getElementById('boxes').addEventListener('input', calculateTotal);
-
     document.getElementById('orderForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      // 收集選購商品
+      const items = [];
+      let subtotal = 0;
+
+      productsList.forEach((p, index) => {
+        const boxes = quantities[index] || 0;
+        if (boxes > 0) {
+          items.push({
+            productName: p.name,
+            grade: p.grade,
+            spec: p.spec,
+            price: p.price,
+            boxes: boxes
+          });
+          subtotal += p.price * boxes;
+        }
+      });
+
+      if (items.length === 0) {
+        alert("⚠️ 請至少選擇一種商品的數量！");
+        return;
+      }
+
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
       submitBtn.innerText = "訂單處理中...";
-
-      const selectedProd = productsList[document.getElementById('productSelect').selectedIndex];
-      const boxes = parseInt(document.getElementById('boxes').value);
-      const subtotal = selectedProd.price * boxes;
 
       let discount = 0;
       if (storeConfig.discountThreshold > 0 && storeConfig.discountRate < 1 && storeConfig.discountRate > 0 && subtotal >= storeConfig.discountThreshold) {
@@ -240,17 +277,13 @@
         name: document.getElementById('name').value,
         phone: document.getElementById('phone').value,
         address: document.getElementById('address').value,
-        productName: selectedProd.name,
-        grade: selectedProd.grade,
-        spec: selectedProd.spec,
-        price: selectedProd.price,
-        boxes: boxes,
         shipWeek: document.getElementById('shipWeek').value,
         payLast5: document.getElementById('payLast5').value,
         subtotal: subtotal,
         discount: discount,
         shippingFee: shippingFee,
-        totalAmount: totalAmount
+        totalAmount: totalAmount,
+        items: items
       };
 
       try {
