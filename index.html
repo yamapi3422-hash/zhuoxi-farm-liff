@@ -108,7 +108,6 @@
       discountRate: 1
     };
 
-    // 清理非數字字元 (例如: "NT$ 1,380" -> 1380)
     function cleanNum(val) {
       if (typeof val === 'number') return val;
       if (!val) return 0;
