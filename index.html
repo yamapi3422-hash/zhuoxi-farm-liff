@@ -3,24 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>卓溪小農 - 線上訂購系統</title>
+  <title>卓溪農產 - 線上訂購系統</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-stone-100 text-stone-800 min-h-screen pb-12">
   <div class="max-w-md mx-auto bg-white min-h-screen shadow-md p-5">
     <header class="border-b pb-4 mb-5 text-center">
-      <h1 class="text-2xl font-bold text-emerald-800">🌿 卓溪小農線上訂購</h1>
+      <h1 class="text-2xl font-bold text-emerald-800">🌿 卓溪農產線上訂購</h1>
       <p class="text-xs text-stone-500 mt-1">產地直達・新鮮品質</p>
     </header>
 
-    <!-- 載入中動畫 -->
     <div id="loading" class="text-center py-12">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-emerald-600 border-t-transparent"></div>
       <p class="text-sm text-stone-500 mt-2">正在載入您的資料與商品選單...</p>
     </div>
 
-    <!-- 訂購表單 (載入完畢後顯示) -->
     <form id="orderForm" class="hidden space-y-4">
       <div>
         <label class="block text-sm font-semibold mb-1">訂購人姓名</label>
@@ -61,7 +59,6 @@
         </div>
       </div>
 
-      <!-- 💳 匯款帳號提示框 -->
       <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 space-y-1 mb-3">
         <p class="font-bold text-sm text-amber-800 mb-1">💳 匯款資訊：</p>
         <p>【銀行代碼】806 元大商業銀行 （淡水分行）</p>
@@ -75,18 +72,27 @@
       </div>
 
       <!-- 金額試算區 -->
-      <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-200 mt-4 space-y-1">
+      <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-200 mt-4 space-y-1.5">
         <div class="flex justify-between text-sm text-stone-600">
           <span>商品小計：</span>
           <span id="subtotalText">NT$ 0</span>
         </div>
-        <div class="flex justify-between text-sm text-stone-600">
-          <span>預估運費：</span>
-          <span id="shippingText">NT$ 160</span>
+        
+        <!-- 折扣欄位（預設隱藏） -->
+        <div id="discountRow" class="flex justify-between text-sm text-amber-700 font-medium hidden">
+          <span id="discountTitle">滿額折扣：</span>
+          <span id="discountText">- NT$ 0</span>
         </div>
+
+        <!-- 運費欄位（預設隱藏） -->
+        <div id="shippingRow" class="flex justify-between text-sm text-stone-600 hidden">
+          <span>預估運費：</span>
+          <span id="shippingText">NT$ 0</span>
+        </div>
+
         <div class="flex justify-between font-bold text-lg text-emerald-900 border-t border-emerald-200 pt-2 mt-2">
           <span>總計金額：</span>
-          <span id="totalText">NT$ 160</span>
+          <span id="totalText">NT$ 0</span>
         </div>
       </div>
 
@@ -97,13 +103,17 @@
   </div>
 
   <script>
-    // ⚙️ 設定區
     const LIFF_ID = "2011111006-ozQwHNo2"; 
     const GAS_URL = "https://script.google.com/macros/s/AKfycbyHGBn0s6zYUV4PRRxZbsELbWPtAeL5VsreF5PbSAsm0CBH95O-WbYhcWAGZEUJrZaw/exec"; 
 
     let currentUserProfile = null;
     let productsList = [];
-    let currentShippingFee = 160;
+    let storeConfig = {
+      shippingFee: 0,
+      freeShippingThreshold: 0,
+      discountThreshold: 0,
+      discountRate: 1
+    };
 
     async function initLIFF() {
       try {
@@ -126,9 +136,8 @@
 
         if (data.status === 'success') {
           productsList = data.products;
-          if (data.shippingFee) {
-            currentShippingFee = Number(data.shippingFee);
-          }
+          if (data.config) storeConfig = data.config;
+
           renderProducts(productsList);
 
           if (data.customer) {
@@ -161,13 +170,43 @@
 
       const selectedProd = productsList[select.selectedIndex];
       const boxes = parseInt(document.getElementById('boxes').value) || 1;
-      const shippingFee = currentShippingFee; 
-
       const subtotal = selectedProd.price * boxes;
-      const total = subtotal + shippingFee;
 
+      // 1. 折扣計算
+      let discount = 0;
+      if (storeConfig.discountThreshold > 0 && storeConfig.discountRate < 1 && storeConfig.discountRate > 0 && subtotal >= storeConfig.discountThreshold) {
+        discount = Math.round(subtotal * (1 - storeConfig.discountRate));
+      }
+
+      // 2. 運費計算
+      let shippingFee = storeConfig.shippingFee || 0;
+      if (storeConfig.freeShippingThreshold > 0 && subtotal >= storeConfig.freeShippingThreshold) {
+        shippingFee = 0;
+      }
+
+      const total = subtotal - discount + shippingFee;
+
+      // 3. UI 動態顯示／隱藏
       document.getElementById('subtotalText').innerText = `NT$ ${subtotal}`;
-      document.getElementById('shippingText').innerText = `NT$ ${shippingFee}`;
+
+      // 折扣欄位控制
+      const discountRow = document.getElementById('discountRow');
+      if (discount > 0) {
+        discountRow.classList.remove('hidden');
+        document.getElementById('discountText').innerText = `- NT$ ${discount}`;
+      } else {
+        discountRow.classList.add('hidden');
+      }
+
+      // 運費欄位控制（若未填運費或運費為 0，直接隱藏該行）
+      const shippingRow = document.getElementById('shippingRow');
+      if (storeConfig.shippingFee > 0) {
+        shippingRow.classList.remove('hidden');
+        document.getElementById('shippingText').innerText = (shippingFee === 0) ? "NT$ 0 (滿額免運)" : `NT$ ${shippingFee}`;
+      } else {
+        shippingRow.classList.add('hidden');
+      }
+
       document.getElementById('totalText').innerText = `NT$ ${total}`;
     }
 
@@ -181,6 +220,20 @@
       submitBtn.innerText = "訂單處理中...";
 
       const selectedProd = productsList[document.getElementById('productSelect').selectedIndex];
+      const boxes = parseInt(document.getElementById('boxes').value);
+      const subtotal = selectedProd.price * boxes;
+
+      let discount = 0;
+      if (storeConfig.discountThreshold > 0 && storeConfig.discountRate < 1 && storeConfig.discountRate > 0 && subtotal >= storeConfig.discountThreshold) {
+        discount = Math.round(subtotal * (1 - storeConfig.discountRate));
+      }
+
+      let shippingFee = storeConfig.shippingFee || 0;
+      if (storeConfig.freeShippingThreshold > 0 && subtotal >= storeConfig.freeShippingThreshold) {
+        shippingFee = 0;
+      }
+
+      const totalAmount = subtotal - discount + shippingFee;
 
       const payload = {
         userId: currentUserProfile.userId,
@@ -191,10 +244,13 @@
         grade: selectedProd.grade,
         spec: selectedProd.spec,
         price: selectedProd.price,
-        boxes: parseInt(document.getElementById('boxes').value),
+        boxes: boxes,
         shipWeek: document.getElementById('shipWeek').value,
         payLast5: document.getElementById('payLast5').value,
-        shippingFee: currentShippingFee
+        subtotal: subtotal,
+        discount: discount,
+        shippingFee: shippingFee,
+        totalAmount: totalAmount
       };
 
       try {
