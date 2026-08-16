@@ -39,12 +39,11 @@
 
       <!-- 商品列表選購區 -->
       <div>
-        <label class="block text-sm font-semibold mb-2">選擇商品與數量</label>
+        <label class="block text-sm font-semibold mb-1">選擇商品與數量</label>
+        <p class="text-xs font-bold text-red-600 mb-2.5">*1斤約1顆，5斤約3-5顆，10斤約7-10顆</p>
         <div id="productList" class="space-y-3"></div>
       </div>
-      <div>
-        <label class="block text-sm font-semibold mb-2 text-red-600">*1斤約1顆，5斤約3-5顆，10斤約7-10顆</label>
-      </div>
+
       <div>
         <label class="block text-sm font-semibold mb-1 mt-4">預計出貨週次</label>
         <select id="shipWeek" required class="w-full border rounded-lg p-2.5 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none">
@@ -109,6 +108,13 @@
       discountRate: 1
     };
 
+    // 清理非數字字元 (例如: "NT$ 1,380" -> 1380)
+    function cleanNum(val) {
+      if (typeof val === 'number') return val;
+      if (!val) return 0;
+      return Number(String(val).replace(/[^0-9.]/g, '')) || 0;
+    }
+
     async function initLIFF() {
       try {
         await liff.init({ liffId: LIFF_ID });
@@ -129,8 +135,20 @@
         const data = await res.json();
 
         if (data.status === 'success') {
-          productsList = data.products;
-          if (data.config) storeConfig = data.config;
+          productsList = data.products.map(p => ({
+            ...p,
+            price: cleanNum(p.price),
+            spec: cleanNum(p.spec)
+          }));
+
+          if (data.config) {
+            storeConfig = {
+              shippingFee: cleanNum(data.config.shippingFee) || 180,
+              freeShippingThreshold: cleanNum(data.config.freeShippingThreshold) || 3000,
+              discountThreshold: cleanNum(data.config.discountThreshold) || 0,
+              discountRate: Number(data.config.discountRate) || 1
+            };
+          }
 
           productsList.forEach((_, index) => {
             quantities[index] = 0;
@@ -195,7 +213,7 @@
       let subtotal = 0;
       productsList.forEach((p, index) => {
         const qty = quantities[index] || 0;
-        subtotal += p.price * qty;
+        subtotal += cleanNum(p.price) * qty;
       });
 
       let discount = 0;
@@ -241,14 +259,15 @@
       productsList.forEach((p, index) => {
         const boxes = quantities[index] || 0;
         if (boxes > 0) {
+          const itemPrice = cleanNum(p.price);
           items.push({
             productName: p.name,
             grade: p.grade,
-            spec: p.spec,
-            price: p.price,
+            spec: cleanNum(p.spec),
+            price: itemPrice,
             boxes: boxes
           });
-          subtotal += p.price * boxes;
+          subtotal += itemPrice * boxes;
         }
       });
 
