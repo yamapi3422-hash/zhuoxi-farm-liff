@@ -314,9 +314,24 @@
         const result = await res.json();
 
         if (result.status === 'success') {
-          alert(`🎉 訂單已順利送出！\n訂單編號：${result.orderId}`);
-          liff.closeWindow();
-        } else {
+  // --- 💡 新增：自動幫顧客在聊天室發送訊息 ---
+  try {
+    if (liff.isInClient()) {
+      await liff.sendMessages([
+        {
+          type: 'text',
+          text: `🙋‍♂️ 我已送出訂單！\n訂單編號：${result.orderId}\n麻煩小編幫我確認，謝謝！`
+        }
+      ]);
+    }
+  } catch (msgErr) {
+    console.log("代發訊息失敗（可能非 LINE App 內開啟）：", msgErr);
+  }
+  // -------------------------------------------
+
+  alert(`🎉 訂單已順利送出！\n訂單編號：${result.orderId}`);
+  liff.closeWindow();
+} else {
           alert("下單失敗：" + result.message);
           submitBtn.disabled = false;
           submitBtn.innerText = "確認送出訂單";
